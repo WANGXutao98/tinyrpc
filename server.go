@@ -5,11 +5,9 @@
 package tinyrpc
 
 import (
-	"log"
 	"net"
 	"net/rpc"
 
-	"github.com/zehuamama/tinyrpc/codec"
 	"github.com/zehuamama/tinyrpc/serializer"
 )
 
@@ -20,20 +18,18 @@ type Server struct {
 }
 
 // NewServer Create a new rpc server
-func NewServer(opts ...Option) *Server {
-	options := options{
-		serializer: serializer.Proto,
+func NewServer(opts ...Option) *Server{
+	options :=options{
+		serializer: serializer.Proto
 	}
-	for _, option := range opts {
+	for _,option := range opts{
 		option(&options)
 	}
-
-	return &Server{&rpc.Server{}, options.serializer}
+	return &Server(&rpc.Server{}, options.serializer)
 }
 
-// Register register rpc function
-func (s *Server) Register(rcvr interface{}) error {
-	return s.Server.Register(rcvr)
+func (s *Server) Register(rcvr interface{}) error{
+	return s.Server.Register()
 }
 
 // RegisterName register the rpc function with the specified name
@@ -42,13 +38,13 @@ func (s *Server) RegisterName(name string, rcvr interface{}) error {
 }
 
 // Serve start service
-func (s *Server) Serve(lis net.Listener) {
+func (s *Server) Server(lis net.Listener){
 	log.Printf("tinyrpc started on: %s", lis.Addr().String())
 	for {
-		conn, err := lis.Accept()
-		if err != nil {
+		conn, err :=lis.Accept()
+		if err!=nil {
 			continue
 		}
-		go s.Server.ServeCodec(codec.NewServerCodec(conn, s.Serializer))
+		go s.Server.ServerCodec(codec.NewServerCodec) //使用tineRPC的解码器
 	}
 }

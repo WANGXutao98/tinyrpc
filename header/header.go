@@ -39,15 +39,14 @@ type RequestHeader struct {
 
 // Marshal will encode request header into a byte slice
 func (r *RequestHeader) Marshal() []byte {
+	//是 Go 语言中 sync.RWMutex 类型的一个方法，它用于在读取共享资源时获取读锁。RWMutex 是一个读/写互斥锁，它允许多个读操作并行进行，但写操作是独占的。
 	r.RLock()
 	defer r.RUnlock()
 	idx := 0
-	// MaxHeaderSize = 2 + 10 + len(string) + 10 + 10 + 4
 	header := make([]byte, MaxHeaderSize+len(r.Method))
 
 	binary.LittleEndian.PutUint16(header[idx:], uint16(r.CompressType))
 	idx += Uint16Size
-
 	idx += writeString(header[idx:], r.Method)
 	idx += binary.PutUvarint(header[idx:], r.ID)
 	idx += binary.PutUvarint(header[idx:], uint64(r.RequestLen))
@@ -55,27 +54,26 @@ func (r *RequestHeader) Marshal() []byte {
 	binary.LittleEndian.PutUint32(header[idx:], r.Checksum)
 	idx += Uint32Size
 	return header[:idx]
+
 }
 
-// Unmarshal will decode request header into a byte slice
-func (r *RequestHeader) Unmarshal(data []byte) (err error) {
+func (r *RequestHeader) UnMarshal(data []byte) (err error) {
 	r.Lock()
 	defer r.Unlock()
 	if len(data) == 0 {
 		return UnmarshalError
 	}
 
+	//捕获panic
 	defer func() {
 		if r := recover(); r != nil {
 			err = UnmarshalError
 		}
 	}()
+
 	idx, size := 0, 0
 	r.CompressType = compressor.CompressType(binary.LittleEndian.Uint16(data[idx:]))
 	idx += Uint16Size
-
-	r.Method, size = readString(data[idx:])
-	idx += size
 
 	r.ID, size = binary.Uvarint(data[idx:])
 	idx += size
@@ -85,14 +83,13 @@ func (r *RequestHeader) Unmarshal(data []byte) (err error) {
 	idx += size
 
 	r.Checksum = binary.LittleEndian.Uint32(data[idx:])
-
 	return
+
 }
 
-// GetCompressType get compress type
 func (r *RequestHeader) GetCompressType() compressor.CompressType {
 	r.RLock()
-	defer r.RUnlock()
+	defer r.Unlock()
 	return compressor.CompressType(r.CompressType)
 }
 
@@ -122,37 +119,17 @@ type ResponseHeader struct {
 	Checksum     uint32
 }
 
-// Marshal will encode response header into a byte slice
-func (r *ResponseHeader) Marshal() []byte {
-	r.RLock()
-	defer r.RUnlock()
-	idx := 0
-	header := make([]byte, MaxHeaderSize+len(r.Error)) // prevent panic
-
-	binary.LittleEndian.PutUint16(header[idx:], uint16(r.CompressType))
-	idx += Uint16Size
-
-	idx += binary.PutUvarint(header[idx:], r.ID)
-	idx += writeString(header[idx:], r.Error)
-	idx += binary.PutUvarint(header[idx:], uint64(r.ResponseLen))
-
-	binary.LittleEndian.PutUint32(header[idx:], r.Checksum)
-	idx += Uint32Size
-	return header[:idx]
-}
-
-// Unmarshal will decode response header into a byte slice
 func (r *ResponseHeader) Unmarshal(data []byte) (err error) {
 	r.Lock()
 	defer r.Unlock()
 	if len(data) == 0 {
 		return UnmarshalError
 	}
-
 	defer func() {
 		if r := recover(); r != nil {
 			err = UnmarshalError
 		}
+
 	}()
 	idx, size := 0, 0
 	r.CompressType = compressor.CompressType(binary.LittleEndian.Uint16(data[idx:]))
@@ -170,12 +147,12 @@ func (r *ResponseHeader) Unmarshal(data []byte) (err error) {
 
 	r.Checksum = binary.LittleEndian.Uint32(data[idx:])
 	return
+
 }
 
-// GetCompressType get compress type
 func (r *ResponseHeader) GetCompressType() compressor.CompressType {
 	r.RLock()
-	defer r.RUnlock()
+	defer r.Unlock()
 	return compressor.CompressType(r.CompressType)
 }
 
@@ -202,7 +179,22 @@ func readString(data []byte) (string, int) {
 func writeString(data []byte, str string) int {
 	idx := 0
 	idx += binary.PutUvarint(data, uint64(len(str)))
+
 	copy(data[idx:], str)
 	idx += len(str)
 	return idx
 }
+
+/*
+func PutUvarint(buf []byte, x uint64) int
+
+参数列表：
+1）buf  需写入的缓冲区
+2）x  uint64类型数字
+返回值：
+1）int  写入字节数。
+2）panic  buf过小。
+功能说明：
+PutUvarint主要是讲uint64类型放入buf中，并返回写入的字节数。如果buf过小，PutUvarint将抛出panic。
+
+*/

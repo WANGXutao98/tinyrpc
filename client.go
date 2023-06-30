@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/rpc"
 
-	"github.com/zehuamama/tinyrpc/codec"
 	"github.com/zehuamama/tinyrpc/compressor"
 	"github.com/zehuamama/tinyrpc/serializer"
 )
@@ -18,7 +17,6 @@ type Client struct {
 	*rpc.Client
 }
 
-//Option provides options for rpc
 type Option func(o *options)
 
 type options struct {

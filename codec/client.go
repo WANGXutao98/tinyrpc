@@ -16,6 +16,7 @@ import (
 	"github.com/zehuamama/tinyrpc/serializer"
 )
 
+//由于TinyRPC是基于标准库net/rpc扩展的，所以TinyRPC在codec层需要实现net/rpc的ClientCodec接口
 type clientCodec struct {
 	r io.Reader
 	w io.Writer
@@ -29,9 +30,7 @@ type clientCodec struct {
 }
 
 // NewClientCodec Create a new client codec
-func NewClientCodec(conn io.ReadWriteCloser,
-	compressType compressor.CompressType, serializer serializer.Serializer) rpc.ClientCodec {
-
+func NewClientCodec(conn io.ReadWriteCloser, compressType compressor.CompressType, serializer serializer.Serializer) rpc.ClientCodec {
 	return &clientCodec{
 		r:          bufio.NewReader(conn),
 		w:          bufio.NewWriter(conn),
@@ -43,6 +42,7 @@ func NewClientCodec(conn io.ReadWriteCloser,
 }
 
 // WriteRequest Write the rpc request header and body to the io stream
+// WriteRequest函数是clientCodec结构体的一个成员方法，它负责将 RPC 请求及其参数序列化和压缩，然后将其写入到底层连接（如网络连接或其他 I/O 连接）。这个函数扮演了 RPC 客户端将请求发送给服务器的角色。
 func (c *clientCodec) WriteRequest(r *rpc.Request, param interface{}) error {
 	c.mutex.Lock()
 	c.pending[r.Seq] = r.ServiceMethod
@@ -51,32 +51,36 @@ func (c *clientCodec) WriteRequest(r *rpc.Request, param interface{}) error {
 	if _, ok := compressor.Compressors[c.compressor]; !ok {
 		return NotFoundCompressorError
 	}
-	reqBody, err := c.serializer.Marshal(param)
+	reqBody, err := c.serializer.Marshal(param) // 用序列化器进行编码
 	if err != nil {
 		return err
 	}
+	//压缩
 	compressedReqBody, err := compressor.Compressors[c.compressor].Zip(reqBody)
 	if err != nil {
 		return err
 	}
+	// 从请求头部对象池取出请求头
 	h := header.RequestPool.Get().(*header.RequestHeader)
 	defer func() {
 		h.ResetHeader()
 		header.RequestPool.Put(h)
 	}()
+
 	h.ID = r.Seq
 	h.Method = r.ServiceMethod
 	h.RequestLen = uint32(len(compressedReqBody))
 	h.CompressType = compressor.CompressType(c.compressor)
 	h.Checksum = crc32.ChecksumIEEE(compressedReqBody)
 
+	//发送请求头
 	if err := sendFrame(c.w, h.Marshal()); err != nil {
 		return err
 	}
+	//发送请求体
 	if err := write(c.w, compressedReqBody); err != nil {
 		return err
 	}
-
 	c.w.(*bufio.Writer).Flush()
 	return nil
 }
@@ -88,12 +92,13 @@ func (c *clientCodec) ReadResponseHeader(r *rpc.Response) error {
 	if err != nil {
 		return err
 	}
+
 	err = c.response.Unmarshal(data)
 	if err != nil {
 		return err
 	}
 	c.mutex.Lock()
-	r.Seq = c.response.ID
+	r.Seq = C.Response.ID
 	r.Error = c.response.Error
 	r.ServiceMethod = c.pending[r.Seq]
 	delete(c.pending, r.Seq)
@@ -101,13 +106,13 @@ func (c *clientCodec) ReadResponseHeader(r *rpc.Response) error {
 	return nil
 }
 
-// ReadResponseBody read the rpc response body from the io stream
 func (c *clientCodec) ReadResponseBody(param interface{}) error {
 	if param == nil {
 		if c.response.ResponseLen != 0 {
 			if err := read(c.r, make([]byte, c.response.ResponseLen)); err != nil {
 				return err
 			}
+
 		}
 		return nil
 	}
@@ -134,6 +139,7 @@ func (c *clientCodec) ReadResponseBody(param interface{}) error {
 	}
 
 	return c.serializer.Unmarshal(resp, param)
+
 }
 
 func (c *clientCodec) Close() error {

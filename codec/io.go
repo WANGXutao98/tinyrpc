@@ -20,15 +20,17 @@ func sendFrame(w io.Writer, data []byte) (err error) {
 		}
 		return
 	}
-
 	n := binary.PutUvarint(size[:], uint64(len(data)))
 	if err = write(w, size[:n]); err != nil {
 		return
 	}
+
 	if err = write(w, data); err != nil {
 		return
+
 	}
 	return
+
 }
 
 func recvFrame(r io.Reader) (data []byte, err error) {
@@ -43,6 +45,7 @@ func recvFrame(r io.Reader) (data []byte, err error) {
 		}
 	}
 	return data, nil
+
 }
 
 func write(w io.Writer, data []byte) error {
@@ -54,6 +57,7 @@ func write(w io.Writer, data []byte) error {
 		index += n
 	}
 	return nil
+
 }
 
 func read(r io.Reader, data []byte) error {
@@ -61,10 +65,9 @@ func read(r io.Reader, data []byte) error {
 		n, err := r.Read(data[index:])
 		if err != nil {
 			if _, ok := err.(net.Error); !ok {
-				return err
+				return io.ErrClosedPipe
 			}
 		}
 		index += n
 	}
-	return nil
 }

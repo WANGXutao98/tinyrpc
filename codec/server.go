@@ -33,7 +33,6 @@ type serverCodec struct {
 	pending    map[uint64]*reqCtx
 }
 
-// NewServerCodec Create a new server codec
 func NewServerCodec(conn io.ReadWriteCloser, serializer serializer.Serializer) rpc.ServerCodec {
 	return &serverCodec{
 		r:          bufio.NewReader(conn),
@@ -44,10 +43,9 @@ func NewServerCodec(conn io.ReadWriteCloser, serializer serializer.Serializer) r
 	}
 }
 
-// ReadRequestHeader read the rpc request header from the io stream
 func (s *serverCodec) ReadRequestHeader(r *rpc.Request) error {
 	s.request.ResetHeader()
-	data, err := recvFrame(s.r)
+	data, err := recvFrame(c.r)
 	if err != nil {
 		return err
 	}
@@ -56,15 +54,14 @@ func (s *serverCodec) ReadRequestHeader(r *rpc.Request) error {
 		return err
 	}
 	s.mutex.Lock()
-	s.seq++
-	s.pending[s.seq] = &reqCtx{s.request.ID, s.request.GetCompressType()}
-	r.ServiceMethod = s.request.Method
+	s.seq++                                                               //序号自增
+	s.pending[s.seq] = &reqCtx{s.request.ID, s.request.GetCompressType()} //自增序号与请求头部ID绑定
+	r.ServiceMethod = s.request.Method                                    //填充ServiceMethod
 	r.Seq = s.seq
 	s.mutex.Unlock()
 	return nil
 }
 
-// ReadRequestBody read the rpc request body from the io stream
 func (s *serverCodec) ReadRequestBody(param interface{}) error {
 	if param == nil {
 		if s.request.RequestLen != 0 {
@@ -100,22 +97,23 @@ func (s *serverCodec) ReadRequestBody(param interface{}) error {
 	}
 
 	return s.serializer.Unmarshal(req, param)
+
 }
 
-// WriteResponse Write the rpc response header and body to the io stream
-func (s *serverCodec) WriteResponse(r *rpc.Response, param interface{}) error {
+func (c *serverCodec) WriteResponse(r *rpc.Response, param interface{}) error {
 	s.mutex.Lock()
 	reqCtx, ok := s.pending[r.Seq]
 	if !ok {
 		s.mutex.Unlock()
 		return InvalidSequenceError
 	}
-	delete(s.pending, r.Seq)
+	delete(c.pending, r.Seq)
 	s.mutex.Unlock()
 
 	if r.Error != "" {
 		param = nil
 	}
+
 	if _, ok := compressor.
 		Compressors[reqCtx.compareType]; !ok {
 		return NotFoundCompressorError
@@ -123,6 +121,7 @@ func (s *serverCodec) WriteResponse(r *rpc.Response, param interface{}) error {
 
 	var respBody []byte
 	var err error
+
 	if param != nil {
 		respBody, err = s.serializer.Marshal(param)
 		if err != nil {
@@ -135,6 +134,7 @@ func (s *serverCodec) WriteResponse(r *rpc.Response, param interface{}) error {
 	if err != nil {
 		return err
 	}
+
 	h := header.ResponsePool.Get().(*header.ResponseHeader)
 	defer func() {
 		h.ResetHeader()
